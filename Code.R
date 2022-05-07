@@ -9,17 +9,17 @@ library(lmtest)
 #Downloading the data
 MCD_data <- getSymbols("MCD", auto.assign = FALSE, from = "2010-01-01", to = "2022-05-01") #Starting 2010-01-01 as the provided data set but extending to April 2022
 
-#Extracting the adjusted close price
-MCD_adj_close <- MCD_data[, 6]
+#Extracting the close price
+MCD_close <- MCD_data[, 4]
 
-#Plotting Adjusted Close
-plot(MCD_adj_close)
+#Plotting close price
+plot(MCD_close)
 
 #Calculating logarithmic returns
-MCD_log_returns <- log(MCD_adj_close) - log(lag(MCD_adj_close))
+MCD_log_returns <- log(MCD_close) - log(lag(MCD_close))
 sum(is.na(MCD_log_returns)) #Only one NA due to differencing
 MCD_log_returns <- na.omit(MCD_log_returns) #Removing the NA
-rm(MCD_adj_close, MCD_data) #Removing unnecessary data from the environment
+rm(MCD_close, MCD_data) #Removing unnecessary data from the environment
 
 #Plotting the returns
 plot(MCD_log_returns)
@@ -121,10 +121,10 @@ garch_complete <- function(ar_order, ma_order, arch_order, garch_order) {
 garch11arma45 <- garch_complete(4, 5, 1, 1) #AR(1), MA(1), AR(3) insignificant, rest super significant, specification tests ok
 
 #GARCH(1,1) with ARMA(3,2) Trying more parsimonious model
-garch11arma32 <- garch_complete(3, 2, 1, 1) #Solver failed to converge
+garch11arma32 <- garch_complete(3, 2, 1, 1) #All ARMA terms insignificant
 
 #GARCH(1,1) with ARMA(3,3) Another shot at a parsimonious model
-garch11arma33 <- garch_complete(3, 3, 1, 1) #Solver failed to converge :(
+garch11arma33 <- garch_complete(3, 3, 1, 1) #Everything significant, spec tests ok
 
 #GARCH(1,1) with ARMA(1,0) Super parsimonious model
 garch11arma10 <- garch_complete(1, 0, 1, 1) #Specification tests OK :D Negative sign bias significant => may wanna try TARCH
@@ -159,17 +159,17 @@ addEventLines(xts("Withdrawal", as.Date("2022-03-08")), col = "blue", lwd = 2, p
 #TARCH(1,1) with ARMA(1,0)
 tarch11arma10_spec <- ugarchspec(mean.model = list(armaOrder = c(1, 0)), variance.model = list(model = "gjrGARCH", garchOrder = c(1, 1)))
 tarch11arma10 <- ugarchfit(spec = tarch11arma10_spec, data = MCD_log_returns)
-tarch11arma10
+tarch11arma10 #Sign bias significant
 
 #Checking TARCH residuals
 resid_norm_tarch11arma10 <- residuals(tarch11arma10, standardize = TRUE)
 par(mfrow=c(1,2))
 acf(resid_norm_tarch11arma10, xlab = "", ylab = "", main = "ACF") #Almost no dependencies
 pacf(resid_norm_tarch11arma10, xlab = "", ylab = "", main = "PACF") #2 dependencies at distant lags
-Box.test(resid_norm_tarch11arma10, type = "Ljung-Box", lag = 20) #Cannot reject the null on no autocorrelation
+Box.test(resid_norm_tarch11arma10, type = "Ljung-Box", lag = 20) #Cannot reject the null of no autocorrelation
 jarque.bera.test(resid_norm_tarch11arma10) #Reject the null of normality
 
-#TARCH(1,1) with ARMA(1,0)
+#TARCH(1,1) with ARMA(4,5)
 tarch11arma45_spec <- ugarchspec(mean.model = list(armaOrder = c(4, 5)), variance.model = list(model = "gjrGARCH", garchOrder = c(1, 1)))
 tarch11arma45 <- ugarchfit(spec = tarch11arma45_spec, data = MCD_log_returns)
 tarch11arma45 #Everything super significant, specification tests ok
@@ -216,8 +216,13 @@ dev.off()
 plot(sigma(tarch11arma10stud))
 lines(sigma(garch11arma10), col = "red") #The lines are basically the same
 
-#Checking whether alpha + beta is smaller than one (stability condition) - we may want to test that but I don't know how yet
+#Checking whether alpha + beta is smaller than one (stability condition)
 tarch11arma10stud@fit$coef[4]+tarch11arma10stud@fit$coef[5]
+#Testing by comparing it with the iGARCH model (as restr vs unrestr)
+igarch11arma10stud_spec <- ugarchspec(mean.model = list(armaOrder = c(1, 0)), variance.model = list(model = "iGARCH", garchOrder = c(1, 1)), distribution.model = "std")
+igarch11arma10stud <- ugarchfit(igarch11arma10stud_spec, MCD_log_returns)
+LR <- -2*(likelihood(garch11arma10stud)-likelihood(igarch11arma10stud))
+pchisq(LR,1) #Reject the null that restriction holds => no iGARCH
 
 #Adding dummy for the withdrawal
 withdrawal_dummy <- matrix(ifelse(index(MCD_log_returns) >= as.Date("2022-03-08"), 1, 0), ncol = 1)
