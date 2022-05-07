@@ -4,7 +4,7 @@ library(aTSA)
 library(tseries)
 library(forecast)
 library(lmtest)
-
+library(moments)
 
 #Downloading the data
 MCD_data <- getSymbols("MCD", auto.assign = FALSE, from = "2010-01-01", to = "2022-05-01") #Starting 2010-01-01 as the provided data set but extending to April 2022
@@ -12,22 +12,52 @@ MCD_data <- getSymbols("MCD", auto.assign = FALSE, from = "2010-01-01", to = "20
 #Extracting the close price
 MCD_close <- MCD_data[, 4]
 
-#Plotting close price
-plot(MCD_close)
+#Close price summary statistics
+length(MCD_close)
+mean(MCD_close)
+sd(MCD_close)
+skewness(MCD_close)
+kurtosis(MCD_close)
+
+#Testing stationarity
+adf.test(MCD_close)
 
 #Calculating logarithmic returns
 MCD_log_returns <- log(MCD_close) - log(lag(MCD_close))
 sum(is.na(MCD_log_returns)) #Only one NA due to differencing
 MCD_log_returns <- na.omit(MCD_log_returns) #Removing the NA
-rm(MCD_close, MCD_data) #Removing unnecessary data from the environment
 
-#Plotting the returns
-plot(MCD_log_returns)
-addEventLines(xts("Withdrawal", as.Date("2022-03-08")), col = "blue", lwd = 2, pos = 2) #Vertical line in time of withdrawal
+#Log-returns summary statistics
+length(MCD_log_returns)
+mean(MCD_log_returns)
+sd(MCD_log_returns)
+skewness(MCD_log_returns)
+kurtosis(MCD_log_returns)
+
+#Average annualized volatility
+sqrt(250)*sd(MCD_log_returns)
+
+#Normality test
+jarque.bera.test(MCD_log_returns)
+
+#Plotting close price and log returns
+par(mfrow = c(2, 1))
+plot(MCD_close, main = "MCD closing stock price", grid.col = NA)
+#addEventLines(xts("Covid-19", as.Date("2020-01-20")), col = "blue", lwd = 2, pos = 1, offset = 2) #Vertical line in time of Covid-19
+#hist(MCD_close, breaks = "FD", border = F, col = "grey", main = "MCD closing price", xlab = "", ylab = "") #Weird distribution
+plot(MCD_log_returns, main = "MCD logarithmic returns", grid.col = NA)
+#addEventLines(xts("Withdrawal", as.Date("2022-03-08")), col = "blue", lwd = 2, pos = 2) #Vertical line in time of withdrawal
+
 #Zooming in
 plot(MCD_log_returns["2021/"])
 addEventLines(xts("Invasion", as.Date("2022-02-24")), col = "red", lwd = 2, pos = 2) #Vertical line in time of invasion
 addEventLines(xts("Withdrawal", as.Date("2022-03-08")), col = "blue", lwd = 2, pos = 4) #Vertical line in time of withdrawal
+
+rm(MCD_close, MCD_data) #Removing unnecessary objects from the environment
+
+#Histogram of log-retruns
+dev.off()
+hist(MCD_log_returns, breaks = "FD", border = F, col = "grey", xlab = "", ylab = "", main = "") #Fat tails, high kurtosis
 
 #Ploting variance
 plot(MCD_log_returns^2)
@@ -35,9 +65,6 @@ addEventLines(xts("Withdrawal", as.Date("2022-03-08")), col = "blue", lwd = 2, p
 
 #Stationarity
 adf.test(MCD_log_returns) #Stationary
-
-#Histogram
-hist(MCD_log_returns, breaks = "FD", border = F, col = "grey", main = "MCD log-returns", xlab = "", ylab = "") #Fat tails, high kurtosis
 
 #ACF and PACF
 par(mfrow=c(1,2))
