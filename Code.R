@@ -2,9 +2,11 @@ library(quantmod)
 library(rugarch)
 library(aTSA)
 library(tseries)
+library(ggpubr)
 library(forecast)
 library(lmtest)
 library(moments)
+library(ggplot2)
 
 #Downloading the data
 MCD_data <- getSymbols("MCD", auto.assign = FALSE, from = "2010-01-01", to = "2022-05-01") #Starting 2010-01-01 as the provided data set but extending to April 2022
@@ -49,27 +51,39 @@ plot(MCD_log_returns, main = "MCD logarithmic returns", grid.col = NA)
 #addEventLines(xts("Withdrawal", as.Date("2022-03-08")), col = "blue", lwd = 2, pos = 2) #Vertical line in time of withdrawal
 
 #Zooming in
+dev.off()
 plot(MCD_log_returns["2021/"])
 addEventLines(xts("Invasion", as.Date("2022-02-24")), col = "red", lwd = 2, pos = 2) #Vertical line in time of invasion
 addEventLines(xts("Withdrawal", as.Date("2022-03-08")), col = "blue", lwd = 2, pos = 4) #Vertical line in time of withdrawal
 
 rm(MCD_close, MCD_data) #Removing unnecessary objects from the environment
 
-#Histogram of log-retruns
-dev.off()
-hist(MCD_log_returns, breaks = "FD", border = F, col = "grey", xlab = "", ylab = "", main = "") #Fat tails, high kurtosis
+#Histogram of log-returns
+hist(MCD_log_returns, breaks = "FD", border = F, col = "black", xlab = "", ylab = "", main = "") #Fat tails, high kurtosis
 
 #Ploting variance
 plot(MCD_log_returns^2)
 addEventLines(xts("Withdrawal", as.Date("2022-03-08")), col = "blue", lwd = 2, pos = 2) #Vertical line in time of withdrawal
+addEventLines(xts("Covid-19", as.Date("2020-01-20")), col = "red", lwd = 2, pos = 2, offset = 2)
 
 #Stationarity
 adf.test(MCD_log_returns) #Stationary
 
 #ACF and PACF
 par(mfrow=c(1,2))
-acf(MCD_log_returns, xlab = "", ylab = "", main = "ACF") #Significant lag 1, 6, 7...
-pacf(MCD_log_returns, xlab = "", ylab = "", main = "PACF") #Significant lag 1, 6, 7...
+#acf(MCD_log_returns, xlab = "", ylab = "", main = "ACF") #Significant lag 1, 6, 7...
+#pacf(MCD_log_returns, xlab = "", ylab = "", main = "PACF") #Significant lag 1, 6, 7...
+acf_ret <- ggAcf(MCD_log_returns)+
+  theme_minimal()+
+  ggtitle("ACF")+
+  ylab("")+
+  xlab("")
+pacf_ret <- ggPacf(MCD_log_returns)+
+  theme_minimal()+
+  ggtitle("PACF")+
+  ylab("")+
+  xlab("")
+ggarrange(acf_ret, pacf_ret, ncol = 1, nrow = 2)
 
 #Ljung-Box test
 for (lag_order in c(4, 8, 12)) {
@@ -93,7 +107,7 @@ arma_complete <- function(ar_oder, ma_order, plot_ACF_PACF = F) {
 }
 
 #AR(1)
-arma_complete(1, 0) #AR(1) significant but many dependencies left
+arma_complete(1, 0, T) #AR(1) significant but many dependencies left
 
 #AR(2)
 arma_complete(2, 0) #AR(2) insignificant, dependencies in 8th and 12th lag
@@ -112,7 +126,7 @@ auto.arima(MCD_log_returns, stationary = T, ic = "aic") #ARMA (3,2)
 auto.arima(MCD_log_returns, stationary = T, ic = "bic") #ARMA (1,0)
 
 #ARMA(3,2)
-arma_complete(3, 2, T) #Only AR(3) insignificant, dependecies in 8th and 12th lag
+arma_complete(3, 2, T) #Only AR(3) insignificant, dependencies in 8th and 12th lag
 
 #ARMA(4,3)
 arma_complete(4, 3) #Everything significant but dependencies left
