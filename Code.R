@@ -7,12 +7,17 @@ library(forecast)
 library(lmtest)
 library(moments)
 library(ggplot2)
+library(MTS)
 
 #Downloading the data
 MCD_data <- getSymbols("MCD", auto.assign = FALSE, from = "2010-01-01", to = "2022-05-01") #Starting 2010-01-01 as the provided data set but extending to April 2022
 
 #Extracting the close price
 MCD_close <- MCD_data[, 4]
+
+########################
+### Data description ###
+########################
 
 #Close price summary statistics
 length(MCD_close)
@@ -90,6 +95,10 @@ for (lag_order in c(4, 8, 12)) {
   print(Box.test(MCD_log_returns, type = "Ljung-Box", lag = lag_order)) #Super significant at all lags
 } 
 
+######################
+### ARMA modelling ###
+######################
+
 #Defining a function that estimates given ARMA, returns p-values of coefficients, AIC, and performs the Ljung-Box test. If needed, also plots ACF and PACF
 arma_complete <- function(ar_oder, ma_order, plot_ACF_PACF = F) {
   arima_model <- Arima(MCD_log_returns, order = c(ar_oder, 0, ma_order)) #Estimate the model
@@ -144,6 +153,10 @@ arma_complete(4, 5, T) #Satisfactory results and higher AIC than previous but st
 unrestr <- Arima(MCD_log_returns, order = c(4, 0, 5))
 restr <- Arima(MCD_log_returns, order = c(1, 0, 0))
 lrtest(unrestr, restr) #Reject the null of restricted model being better
+
+#######################
+### GARCH modelling ###
+#######################
 
 #Testing for arch-effects
 arma45 <- arima(MCD_log_returns, order = c(4, 0 ,5))
@@ -238,7 +251,6 @@ pacf(resid_norm_garch11arma10stud, xlab = "", ylab = "", main = "PACF") #1 or 2 
 Box.test(resid_norm_garch11arma10stud, type = "Ljung-Box", lag = 20) #Cannot reject the null on no autocorrelation
 jarque.bera.test(resid_norm_garch11arma10stud) #Reject the null of normality
 
-
 #TARCH(1, 1) with ARMA(1,0) and Student's distribution
 tarch11arma10stud_spec <- ugarchspec(mean.model = list(armaOrder = c(1, 0)), variance.model = list(model = "gjrGARCH", garchOrder = c(1, 1)), distribution.model = "std")
 tarch11arma10stud <- ugarchfit(tarch11arma10stud_spec, MCD_log_returns)
@@ -277,4 +289,24 @@ tarch11arma10stud_covid_spec <- ugarchspec(mean.model = list(armaOrder = c(1, 0)
 tarch11arma10stud_covid <- ugarchfit(tarch11arma10stud_covid_spec, MCD_log_returns)
 tarch11arma10stud_covid #Covid super significant => Let's change the topic? :D
 
+###################
+### Final model ###
+###################
+ext_regs <- cbind(covid_dummy, withdrawal_dummy)
+colnames(ext_regs) <- c("Covid", "Withdrawal")
+final_model_spec <-ugarchspec(mean.model = list(armaOrder = c(1, 0)), variance.model = list(model = "gjrGARCH", garchOrder = c(1, 1), external.regressors = ext_regs), distribution.model = "std")
+final_model <- ugarchfit(final_model_spec, MCD_log_returns)
+final_model
 
+#Inspecting the residuals
+Box.test(final_model@fit$residuals, type = "Ljung-Box", lag = 8) #Reject null
+
+#Inspecting the standardized residuals
+stand_resid_final_model <- residuals(final_model, standardize = TRUE)
+par(mfrow=c(1,2))
+acf(stand_resid_final_model, xlab = "", ylab = "", main = "ACF") #Almost no dependencies
+pacf(stand_resid_final_model, xlab = "", ylab = "", main = "PACF") #1 or 2 dependencies at distant lags
+Box.test(stand_resid_final_model, type = "Ljung-Box", lag = 20) #Cannot reject the null of no autocorrelation
+Box.test(stand_resid_final_model^2, type = "Ljung-Box", lag = 20) #Cannot reject the null of no autocorrelation
+jarque.bera.test(stand_resid_final_model) #Reject the null of normality
+archTest(stand_resid_final_model, 20)
