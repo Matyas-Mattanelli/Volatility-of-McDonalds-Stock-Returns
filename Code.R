@@ -333,11 +333,54 @@ addEventLines(xts("Covid-19", as.Date("2020-01-20")), col = "green", lwd = 2, po
 addLegend("topleft", on = 1, legend.names = c("Log-returns", "GARCH volatility (baseline model)", "GARCH volatility (no event dummies)"), col = c("black", "red", "blue"), lty = 1, bty = "n", lwd = c(2,1,1))
 
 #Shorter period
-short_term_model_spec <-ugarchspec(mean.model = list(armaOrder = c(1, 0)), variance.model = list(model = "gjrGARCH", garchOrder = c(1, 1), external.regressors = matrix(ext_regs[(nrow(ext_regs)-104+1):nrow(ext_regs), 2], ncol = 1)), distribution.model = "std")
-short_term_model <- ugarchfit(short_term_model_spec, MCD_log_returns["2021-12/"])
+MCD_log_returns_cut <- MCD_log_returns["2021-12/"]
+length(MCD_log_returns_cut) #104 obs
+plot(MCD_log_returns_cut)
+addEventLines(xts("Withdrawal", as.Date("2022-03-08")), col = "blue", lwd = 2, pos = 2) #Vertical line in time of withdrawal
+adf.test(MCD_log_returns_cut) #Stationary
+auto.arima(MCD_log_returns_cut, stationary = T, ic = "aic") #ARMA(0,0)
+auto.arima(MCD_log_returns_cut, stationary = T, ic = "bic") #ARMA(0,0)
+acf(MCD_log_returns_cut) #No dependencies
+pacf(MCD_log_returns_cut) #No depencencies
+hist(MCD_log_returns_cut, breaks = "FD", border = F, col = "black")
+short_term_model_spec <-ugarchspec(mean.model = list(armaOrder = c(0, 0)), variance.model = list(model = "sGARCH", garchOrder = c(1, 1), external.regressors = matrix(ext_regs[(nrow(ext_regs)-104+1):nrow(ext_regs), 2], ncol = 1)))
+short_term_model <- ugarchfit(short_term_model_spec, MCD_log_returns_cut)
 short_term_model
-length(MCD_log_returns["2021-12/"]) #104 observations
+stand_resid_short_term_model <- residuals(short_term_model, standardize = TRUE)
+Box.test(stand_resid_short_term_model, type = "Ljung-Box", lag = 10) #Cannot reject the null of no autocorrelation
+Box.test(stand_resid_short_term_model^2, type = "Ljung-Box", lag = 10) #Cannot reject the null of no autocorrelation
+jarque.bera.test(stand_resid_short_term_model) #Reject the null of normality
+archTest(stand_resid_short_term_model, 10)
 
 #########################
 ### Robustness checks ###
 #########################
+
+### ARMA(4,5) ###
+robust_model_spec <-ugarchspec(mean.model = list(armaOrder = c(4, 5)), variance.model = list(model = "gjrGARCH", garchOrder = c(1, 1), external.regressors = ext_regs), distribution.model = "std")
+robust_model <- ugarchfit(robust_model_spec, MCD_log_returns)
+robust_model #Results basically the same
+
+#Inspecting the standardized residuals
+stand_resid_robust_model <- residuals(robust_model, standardize = TRUE)
+par(mfrow=c(1,2))
+acf(stand_resid_robust_model, xlab = "", ylab = "", main = "ACF") #Almost no dependencies
+pacf(stand_resid_robust_model, xlab = "", ylab = "", main = "PACF") #1 dependency at a distant lag
+Box.test(stand_resid_robust_model, type = "Ljung-Box", lag = 20) #Cannot reject the null of no autocorrelation
+Box.test(stand_resid_robust_model^2, type = "Ljung-Box", lag = 20) #Cannot reject the null of no autocorrelation
+jarque.bera.test(stand_resid_robust_model) #Reject the null of normality
+archTest(stand_resid_robust_model, 20) #No ARCH effects
+hist(stand_resid_robust_model, breaks = "FD", border = F, col = "black") #Looks good, bruh
+
+#Comparing volatilities of final and robust
+dev.off()
+plot(sigma(final_model), lwd = 3, main = "Volatility")
+lines(sigma(robust_model), col = "red") #Indistinguishable
+addLegend("topleft", on = 1, legend.names = c("Final model volatility (TARCH(1,1) ARMA(1,0))", "Robustness check model volatility (TARCH(1,1) ARMA(4,5))"), col = c("black", "red"), lty = 1, bty = "n", lwd = c(3, 1))
+
+### Normal distribution (rather than t) - stačí jen zmínit jedna/dvě věty ###
+robust_norm_model_spec <-ugarchspec(mean.model = list(armaOrder = c(1, 0)), variance.model = list(model = "gjrGARCH", garchOrder = c(1, 1), external.regressors = ext_regs))
+robust_norm_model <- ugarchfit(robust_norm_model_spec, MCD_log_returns)
+robust_norm_model #Same as final
+
+### 5-day frequency ###
