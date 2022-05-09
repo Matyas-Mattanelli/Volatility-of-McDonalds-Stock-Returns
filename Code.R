@@ -153,6 +153,8 @@ arma_complete(4, 5, T) #Satisfactory results and higher AIC than previous but st
 unrestr <- Arima(MCD_log_returns, order = c(4, 0, 5))
 restr <- Arima(MCD_log_returns, order = c(1, 0, 0))
 lrtest(unrestr, restr) #Reject the null of restricted model being better
+hist(restr$residuals, breaks = "FD", border = F, col = "black")
+jarque.bera.test(restr$residuals) #Reject null
 
 #######################
 ### GARCH modelling ###
@@ -310,3 +312,32 @@ Box.test(stand_resid_final_model, type = "Ljung-Box", lag = 20) #Cannot reject t
 Box.test(stand_resid_final_model^2, type = "Ljung-Box", lag = 20) #Cannot reject the null of no autocorrelation
 jarque.bera.test(stand_resid_final_model) #Reject the null of normality
 archTest(stand_resid_final_model, 20)
+hist(stand_resid_final_model, breaks = "FD", border = F, col = "black")
+
+#Testing for integration
+igarch_spec <- ugarchspec(mean.model = list(armaOrder = c(1, 0)), variance.model = list(model = "iGARCH", garchOrder = c(1, 1), external.regressors = ext_regs), distribution.model = "std")
+igarch <- ugarchfit(igarch_spec, MCD_log_returns)
+LR <- -2*(likelihood(final_model)-likelihood(igarch))
+pchisq(LR, 1) #Reject the null that restriction holds => no iGARCH
+lrtest(final_model, igarch)
+alpha_beta_sum <- final_model@fit$coef[4]+final_model@fit$coef[5] #0.87
+log(2)/log(0.87)
+
+#Plotting estimated volatility
+final_model_no_covid_spec <-ugarchspec(mean.model = list(armaOrder = c(1, 0)), variance.model = list(model = "gjrGARCH", garchOrder = c(1, 1)), distribution.model = "std")
+final_model_no_covid <- ugarchfit(final_model_no_covid_spec, MCD_log_returns)
+plot(MCD_log_returns, main = "MCD log-returns", grid.col = NA)
+lines(sigma(final_model_no_covid), col = "blue")
+lines(sigma(final_model), col = "red")
+addEventLines(xts("Covid-19", as.Date("2020-01-20")), col = "green", lwd = 2, pos = 2, srt=90) #Vertical line in time of Covid-19
+addLegend("topleft", on = 1, legend.names = c("Log-returns", "GARCH volatility (baseline model)", "GARCH volatility (no event dummies)"), col = c("black", "red", "blue"), lty = 1, bty = "n", lwd = c(2,1,1))
+
+#Shorter period
+short_term_model_spec <-ugarchspec(mean.model = list(armaOrder = c(1, 0)), variance.model = list(model = "gjrGARCH", garchOrder = c(1, 1), external.regressors = matrix(ext_regs[(nrow(ext_regs)-104+1):nrow(ext_regs), 2], ncol = 1)), distribution.model = "std")
+short_term_model <- ugarchfit(short_term_model_spec, MCD_log_returns["2021-12/"])
+short_term_model
+length(MCD_log_returns["2021-12/"]) #104 observations
+
+#########################
+### Robustness checks ###
+#########################
