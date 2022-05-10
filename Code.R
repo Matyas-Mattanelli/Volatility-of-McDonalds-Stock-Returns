@@ -14,6 +14,7 @@ MCD_data <- getSymbols("MCD", auto.assign = FALSE, from = "2010-01-01", to = "20
 
 #Extracting the close price
 MCD_close <- MCD_data[, 4]
+rm(MCD_data) #Removing an unneccessary object from the environment
 
 ########################
 ### Data description ###
@@ -51,7 +52,7 @@ jarque.bera.test(MCD_log_returns)
 par(mfrow = c(2, 1))
 plot(MCD_close, main = "MCD closing stock price", grid.col = NA)
 #addEventLines(xts("Covid-19", as.Date("2020-01-20")), col = "blue", lwd = 2, pos = 1, offset = 2) #Vertical line in time of Covid-19
-#hist(MCD_close, breaks = "FD", border = F, col = "grey", main = "MCD closing price", xlab = "", ylab = "") #Weird distribution
+#hist(MCD_close, breaks = "FD", border = F, col = "grey", main = "MCD closing price", xlab = "", ylab = "")
 plot(MCD_log_returns, main = "MCD logarithmic returns", grid.col = NA)
 #addEventLines(xts("Withdrawal", as.Date("2022-03-08")), col = "blue", lwd = 2, pos = 2) #Vertical line in time of withdrawal
 
@@ -60,8 +61,6 @@ dev.off()
 plot(MCD_log_returns["2021/"])
 addEventLines(xts("Invasion", as.Date("2022-02-24")), col = "red", lwd = 2, pos = 2) #Vertical line in time of invasion
 addEventLines(xts("Withdrawal", as.Date("2022-03-08")), col = "blue", lwd = 2, pos = 4) #Vertical line in time of withdrawal
-
-rm(MCD_close, MCD_data) #Removing unnecessary objects from the environment
 
 #Histogram of log-returns
 hist(MCD_log_returns, breaks = "FD", border = F, col = "black", xlab = "", ylab = "", main = "") #Fat tails, high kurtosis
@@ -314,6 +313,19 @@ jarque.bera.test(stand_resid_final_model) #Reject the null of normality
 archTest(stand_resid_final_model, 20)
 hist(stand_resid_final_model, breaks = "FD", border = F, col = "black")
 
+#ACF and PACF
+acf_res <- ggAcf(stand_resid_final_model)+
+  theme_minimal()+
+  ggtitle("ACF")+
+  ylab("")+
+  xlab("")
+pacf_res <- ggPacf(stand_resid_final_model)+
+  theme_minimal()+
+  ggtitle("PACF")+
+  ylab("")+
+  xlab("")
+ggarrange(acf_res, pacf_res, ncol = 1, nrow = 2)
+
 #Testing for integration
 igarch_spec <- ugarchspec(mean.model = list(armaOrder = c(1, 0)), variance.model = list(model = "iGARCH", garchOrder = c(1, 1), external.regressors = ext_regs), distribution.model = "std")
 igarch <- ugarchfit(igarch_spec, MCD_log_returns)
@@ -374,13 +386,11 @@ hist(stand_resid_robust_model, breaks = "FD", border = F, col = "black") #Looks 
 
 #Comparing volatilities of final and robust
 dev.off()
-plot(sigma(final_model), lwd = 3, main = "Volatility")
+plot(sigma(final_model), lwd = 3, main = "Volatility", grid.col = NA)
 lines(sigma(robust_model), col = "red") #Indistinguishable
 addLegend("topleft", on = 1, legend.names = c("Final model volatility (TARCH(1,1) ARMA(1,0))", "Robustness check model volatility (TARCH(1,1) ARMA(4,5))"), col = c("black", "red"), lty = 1, bty = "n", lwd = c(3, 1))
 
-### Normal distribution (rather than t) - stačí jen zmínit jedna/dvě věty ###
-robust_norm_model_spec <-ugarchspec(mean.model = list(armaOrder = c(1, 0)), variance.model = list(model = "gjrGARCH", garchOrder = c(1, 1), external.regressors = ext_regs))
+### Normal distribution (rather than t)
+robust_norm_model_spec <- ugarchspec(mean.model = list(armaOrder = c(1, 0)), variance.model = list(model = "gjrGARCH", garchOrder = c(1, 1), external.regressors = ext_regs))
 robust_norm_model <- ugarchfit(robust_norm_model_spec, MCD_log_returns)
 robust_norm_model #Same as final
-
-### 5-day frequency ###
