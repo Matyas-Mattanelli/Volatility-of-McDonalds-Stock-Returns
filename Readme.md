@@ -1,3 +1,3 @@
-This Repository serves for the purpose of coordinating work on the Term Paper project for Applied Econometrics - JEM116.
+This paper investigates the effects of the COVID-19 pandemic and the Russian invasion of Ukraine on the conditional volatility of returns on the stock of McDonald's Corporation. For this purpose, TARCH and GARCH models on the daily price data since the start of 2010 were utilized. The analyses showed that both events have a significant and positive influence on the volatility. Additionally, a significant asymmetric effect of positive and negative returns on volatility was uncovered.
 
 Authors: Matyáš Mattanelli, Jan Kubal
